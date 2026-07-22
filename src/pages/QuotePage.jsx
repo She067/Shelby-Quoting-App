@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Page, Card, CardHeader, CardBody, Button, Pill, Select } from "../components/ui";
-import { calcRoomPricing } from "../lib/pricingEngine";
+import { calcRoomPricing } from "../lib/PricingEngine";
 import PlanMeasureDrawer from "../components/PlanMeasureDrawer";
 
 
