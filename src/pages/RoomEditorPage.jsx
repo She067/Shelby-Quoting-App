@@ -11,7 +11,9 @@ export default function RoomEditorPage() {
   const [searchParams] = useSearchParams();
   const roomVariantIdFromUrl = searchParams.get("room_variant_id");
 
-  const [loading, setLoading] = useState(false);
+ const [loading, setLoading] = useState(false);
+
+  const [room, setRoom] = useState(null);
 
   const [pricing, setPricing] = useState(null);
   const [pricingContext, setPricingContext] = useState(null);
@@ -28,6 +30,7 @@ export default function RoomEditorPage() {
 
   // ✅ critical: we must always know which variant we're editing
   const [effectiveRoomVariantId, setEffectiveRoomVariantId] = useState(null);
+  const [variantName, setVariantName] = useState("Base");
 
   async function load() {
     setLoading(true);
@@ -54,6 +57,28 @@ export default function RoomEditorPage() {
       }
 
       setEffectiveRoomVariantId(effectiveVariantId);
+
+const { data: variantRow, error: variantErr } = await supabase
+  .from("room_variants")
+  .select("name")
+  .eq("id", effectiveVariantId)
+  .single();
+
+if (variantErr) {
+  console.warn("Variant name load error:", variantErr.message);
+} else {
+  setVariantName(variantRow?.name || "Base");
+}
+
+      const { data: roomRow, error: roomErr } = await supabase
+  .from("quote_rooms")
+  .select("id, name")
+  .eq("id", roomId)
+  .single();
+
+if (roomErr) return alert(roomErr.message);
+
+setRoom(roomRow);
 
       // pricing row (create if missing)
       const { data: rows, error: pErr } = await supabase
@@ -437,7 +462,7 @@ export default function RoomEditorPage() {
     setPlanDoc(data);
   }
 
-  if (loading || !pricing) {
+  if (loading || !pricing || !room) {
     return (
       <Page title="Room Editor">
         <div className="p-4 text-slate-600">Loading…</div>
@@ -468,6 +493,15 @@ export default function RoomEditorPage() {
         </div>
       }
     >
+<div className="mb-6">
+  <h2 className="text-2xl font-semibold">
+    {room?.name}
+    <span className="ml-2 text-lg font-normal text-slate-500">
+      ({variantName || "Base"})
+    </span>
+  </h2>
+</div>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Pricing Inputs" />

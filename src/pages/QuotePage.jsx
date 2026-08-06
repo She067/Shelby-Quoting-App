@@ -68,6 +68,9 @@ export default function QuotePage() {
   const [showAdd, setShowAdd] = useState(false);
   const [roomName, setRoomName] = useState("");
 
+  const [renameRoom, setRenameRoom] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
 
@@ -247,10 +250,11 @@ export default function QuotePage() {
     const variantInfo = await ensureBaseVariant(q);
 
     const { data: r, error: rErr } = await supabase
-      .from("quote_rooms")
-      .select("id,name,created_at")
-      .eq("quote_id", id)
-      .order("created_at", { ascending: true });
+  .from("quote_rooms")
+  .select("id,name,created_at,sort_order")
+  .eq("quote_id", id)
+  .order("sort_order", { ascending: true })
+  .order("created_at", { ascending: true });
     if (rErr) throw rErr;
 
     const roomList = r ?? [];
@@ -336,8 +340,12 @@ export default function QuotePage() {
 
   const res = await supabase
     .from("quote_rooms")
-    .insert({ quote_id: id, name: roomName.trim() })
-    .select("id,name,created_at")
+.insert({
+  quote_id: id,
+  name: roomName.trim(),
+  sort_order: rooms.length,
+})
+.select("id,name,created_at,sort_order")
     .single();
 
   console.log("ADD ROOM result:", res);
@@ -372,6 +380,126 @@ export default function QuotePage() {
     }
 
     await loadVariantData(selectedVariantId, [...rooms.map((r) => r.id), data.id]);
+  }
+}
+
+function openRenameRoom(room) {
+  setRenameRoom(room);
+  setRenameValue(room.name || "");
+}
+
+async function saveRoomName() {
+  const nextName = renameValue.trim();
+
+  if (!renameRoom?.id || !nextName) {
+    alert("Room name is required.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("quote_rooms")
+    .update({ name: nextName })
+    .eq("id", renameRoom.id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  setRooms((currentRooms) =>
+    currentRooms.map((room) =>
+      room.id === renameRoom.id
+        ? { ...room, name: nextName }
+        : room
+    )
+  );
+
+  setRenameRoom(null);
+  setRenameValue("");
+}
+
+async function deleteRoom(room) {
+  if (!room?.id) return;
+
+  const confirmed = window.confirm(
+    `Delete "${room.name}"?\n\nThis cannot be undone.`
+  );
+
+  if (!confirmed) return;
+
+  // Delete child records first
+  await supabase
+    .from("variant_room_extras")
+    .delete()
+    .eq("room_id", room.id);
+
+  await supabase
+    .from("variant_room_pricing")
+    .delete()
+    .eq("room_id", room.id);
+
+  await supabase
+    .from("room_extras")
+    .delete()
+    .eq("quote_room_id", room.id);
+
+  await supabase
+    .from("room_pricing")
+    .delete()
+    .eq("quote_room_id", room.id);
+
+  await supabase
+    .from("room_plan_segments")
+    .delete()
+    .eq("quote_room_id", room.id);
+
+  const { error } = await supabase
+    .from("quote_rooms")
+    .delete()
+    .eq("id", room.id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  setRooms((rooms) => rooms.filter((r) => r.id !== room.id));
+}
+
+async function moveRoom(roomId, direction) {
+  const currentIndex = rooms.findIndex((room) => room.id === roomId);
+  if (currentIndex === -1) return;
+
+  const targetIndex =
+    direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+  if (targetIndex < 0 || targetIndex >= rooms.length) return;
+
+  const reordered = [...rooms];
+  const [movedRoom] = reordered.splice(currentIndex, 1);
+  reordered.splice(targetIndex, 0, movedRoom);
+
+  const normalized = reordered.map((room, index) => ({
+    ...room,
+    sort_order: index,
+  }));
+
+  setRooms(normalized);
+
+  const results = await Promise.all(
+    normalized.map((room) =>
+      supabase
+        .from("quote_rooms")
+        .update({ sort_order: room.sort_order })
+        .eq("id", room.id)
+    )
+  );
+
+  const failed = results.find((result) => result.error);
+
+  if (failed?.error) {
+    alert(failed.error.message);
+    await load();
   }
 }
 
@@ -1024,7 +1152,33 @@ if (loading && !quote) {
 
           return (
             <li key={r.id} className="px-4 py-3 flex items-center justify-between">
-              <div className="min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
+
+  <div className="flex flex-col">
+    <button
+      type="button"
+      className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
+      disabled={rooms.findIndex((room) => room.id === r.id) === 0}
+      onClick={() => moveRoom(r.id, "up")}
+      title="Move room up"
+    >
+      ▲
+    </button>
+
+    <button
+      type="button"
+      className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
+      disabled={
+        rooms.findIndex((room) => room.id === r.id) === rooms.length - 1
+      }
+      onClick={() => moveRoom(r.id, "down")}
+      title="Move room down"
+    >
+      ▼
+    </button>
+  </div>
+
+  <div className="min-w-0">
                 <div className="font-medium truncate">{r.name}</div>
 
                 <div className="mt-1 text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
@@ -1043,11 +1197,17 @@ if (loading && !quote) {
                 </div>
 
                 <div className="mt-2">
-                  {ready ? <Pill tone="green">Ready</Pill> : <Pill tone="amber">Needs info</Pill>}
-                </div>
-              </div>
+  {ready ? (
+    <Pill tone="green">Ready</Pill>
+  ) : (
+    <Pill tone="amber">Needs info</Pill>
+  )}
+</div>
 
-              <div className="flex items-center gap-6">
+</div> {/* room information */}
+</div> {/* arrows + room information */}
+
+<div className="flex items-center gap-6">
                 <div className="text-right">
                   <div className="text-sm text-slate-500">Room Total</div>
                   <div className="font-semibold tabular-nums">
@@ -1055,12 +1215,31 @@ if (loading && !quote) {
                   </div>
                 </div>
 
-                <Link
-                  className="text-sm font-medium text-slate-700 hover:underline"
-                  to={`/quotes/${id}/rooms/${r.id}?room_variant_id=${selectedVariantId || ""}`}
-                >
-                  Edit
-                </Link>
+                <div className="flex items-center gap-3">
+  <Link
+    className="text-sm font-medium text-slate-700 hover:underline"
+    to={`/quotes/${id}/rooms/${r.id}?room_variant_id=${selectedVariantId || ""}`}
+  >
+    Edit
+  </Link>
+ 
+  <button
+    type="button"
+    className="text-sm font-medium text-slate-600 hover:underline"
+    onClick={() => openRenameRoom(r)}
+  >
+    Rename
+  </button>
+
+  <button
+  type="button"
+  className="text-sm font-medium text-red-600 hover:underline"
+  onClick={() => deleteRoom(r)}
+>
+  Delete
+</button>
+
+</div>
               </div>
             </li>
           );
@@ -1088,6 +1267,51 @@ if (loading && !quote) {
     )}
   </CardBody>
 </Card>
+
+{renameRoom && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+    <div className="w-full max-w-md rounded-xl border bg-white shadow-xl">
+      <div className="border-b px-4 py-3">
+        <div className="font-semibold">Rename Room</div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div>
+          <label className="text-sm text-slate-600">Room Name</label>
+          <input
+            autoFocus
+            className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveRoomName();
+              if (e.key === "Escape") setRenameRoom(null);
+            }}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setRenameRoom(null)}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="button"
+            disabled={!renameValue.trim()}
+            onClick={saveRoomName}
+          >
+            Save
+          </Button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </Page>
   );
 }
