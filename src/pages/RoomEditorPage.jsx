@@ -25,6 +25,9 @@ export default function RoomEditorPage() {
   const [roomExtras, setRoomExtras] = useState([]);
   const [planOpen, setPlanOpen] = useState(false);
 
+  const [manualFeet, setManualFeet] = useState("");
+  const [manualInches, setManualInches] = useState("");
+
   // ✅ pull plan doc same way as QuotePage
   const [planDoc, setPlanDoc] = useState(null);
 
@@ -117,6 +120,14 @@ setRoom(roomRow);
       };
 
       setPricing(uiPricing);
+
+      const existingLf = Number(uiPricing.manual_total_lf || 0);
+
+const wholeFeet = Math.floor(existingLf);
+const leftoverInches = Math.round((existingLf - wholeFeet) * 12);
+
+setManualFeet(wholeFeet ? String(wholeFeet) : "");
+setManualInches(leftoverInches ? String(leftoverInches) : "");
 
       // ✅ Load plan doc for this quote (same as QuotePage)
       const { data: pd, error: pdErr } = await supabase
@@ -518,35 +529,76 @@ setRoom(roomRow);
             </div>
 
             <div>
-              <label className="text-sm text-slate-600">Total LF</label>
-              <div className="mt-1 flex items-center gap-2">
-                <Input
-                  className="flex-1"
-                  type="number"
-                  value={pricing.manual_total_lf ?? ""}
-                  onChange={(e) =>
-                    save(
-                      { manual_total_lf: e.target.value === "" ? null : Number(e.target.value) },
-                      { recalc: true }
-                    )
-                  }
-                />
-                <Button
-                  variant="secondary"
-                  type="button"
-                  onClick={() => {
-                    if (!canOpenPlan) {
-                      alert("No plan PDF uploaded for this quote. Upload it on the Quote page first.");
-                      return;
-                    }
-                    setPlanOpen(true);
-                  }}
-                  disabled={!canOpenPlan}
-                  title={!canOpenPlan ? "Upload a plan PDF on the Quote page first" : ""}
-                >
-                  Measure on Plan
-                </Button>
-              </div>
+              <label className="text-sm text-slate-600">Total Linear Footage</label>
+
+<div className="mt-1 flex items-end gap-3">
+  <div className="flex-1">
+    <div className="text-xs text-slate-500">Feet</div>
+    <Input
+      type="number"
+      min="0"
+      step="0.01"
+      value={manualFeet}
+      onChange={(e) => {
+        const nextFeet = e.target.value;
+        setManualFeet(nextFeet);
+
+        const totalLf =
+          Number(nextFeet || 0) +
+          Number(manualInches || 0) / 12;
+
+        save(
+          { manual_total_lf: totalLf },
+          { recalc: true }
+        );
+      }}
+    />
+  </div>
+
+  <div className="flex-1">
+    <div className="text-xs text-slate-500">Inches</div>
+    <Input
+      type="number"
+      min="0"
+      step="0.01"
+      value={manualInches}
+      onChange={(e) => {
+        const nextInches = e.target.value;
+        setManualInches(nextInches);
+
+        const totalLf =
+          Number(manualFeet || 0) +
+          Number(nextInches || 0) / 12;
+
+        save(
+          { manual_total_lf: totalLf },
+          { recalc: true }
+        );
+      }}
+    />
+  </div>
+
+  <Button
+    variant="secondary"
+    type="button"
+    onClick={() => {
+      if (!canOpenPlan) {
+        alert("No plan PDF uploaded for this quote. Upload it on the Quote page first.");
+        return;
+      }
+
+      setPlanOpen(true);
+    }}
+    disabled={!canOpenPlan}
+    title={!canOpenPlan ? "Upload a plan PDF on the Quote page first" : ""}
+  >
+    Measure on Plan
+  </Button>
+</div>
+
+<div className="mt-1 text-xs text-slate-500">
+  Total: {Number(pricing.manual_total_lf || 0).toFixed(2)} LF
+</div>
             </div>
 
             <div>
@@ -585,7 +637,26 @@ setRoom(roomRow);
               <input
                 type="checkbox"
                 checked={!!pricing.has_mixed_finish}
-                onChange={(e) => save({ has_mixed_finish: e.target.checked }, { recalc: true })}
+               onChange={(e) => {
+  const checked = e.target.checked;
+
+  if (checked) {
+    save(
+      { has_mixed_finish: true },
+      { recalc: true }
+    );
+  } else {
+    save(
+      {
+        has_mixed_finish: false,
+        secondary_finish_id: null,
+        secondary_lf: 0,
+        mixed_finish_delta: 0,
+      },
+      { recalc: true }
+    );
+  }
+}}
               />
               <span className="text-sm text-slate-700">Mixed Finish</span>
             </div>
