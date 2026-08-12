@@ -28,6 +28,9 @@ export default function RoomEditorPage() {
   const [manualFeet, setManualFeet] = useState("");
   const [manualInches, setManualInches] = useState("");
 
+  const [secondaryFeet, setSecondaryFeet] = useState("");
+  const [secondaryInches, setSecondaryInches] = useState("");
+
   // ✅ pull plan doc same way as QuotePage
   const [planDoc, setPlanDoc] = useState(null);
 
@@ -128,6 +131,21 @@ const leftoverInches = Math.round((existingLf - wholeFeet) * 12);
 
 setManualFeet(wholeFeet ? String(wholeFeet) : "");
 setManualInches(leftoverInches ? String(leftoverInches) : "");
+
+const existingSecondaryLf = Number(uiPricing.secondary_lf || 0);
+
+const secondaryWholeFeet = Math.floor(existingSecondaryLf);
+const secondaryLeftoverInches = Math.round(
+  (existingSecondaryLf - secondaryWholeFeet) * 12
+);
+
+setSecondaryFeet(
+  secondaryWholeFeet ? String(secondaryWholeFeet) : ""
+);
+
+setSecondaryInches(
+  secondaryLeftoverInches ? String(secondaryLeftoverInches) : ""
+);
 
       // ✅ Load plan doc for this quote (same as QuotePage)
       const { data: pd, error: pdErr } = await supabase
@@ -680,15 +698,61 @@ setManualInches(leftoverInches ? String(leftoverInches) : "");
                 </div>
 
                 <div>
-                  <label className="text-sm text-slate-600">Secondary LF</label>
-                  <Input
-                    className="mt-1"
-                    type="number"
-                    value={pricing.secondary_lf ?? ""}
-                    onChange={(e) =>
-                      save({ secondary_lf: e.target.value === "" ? 0 : Number(e.target.value) }, { recalc: true })
-                    }
-                  />
+                  <label className="text-sm text-slate-600">
+  Secondary Linear Footage
+</label>
+
+<div className="mt-1 grid grid-cols-2 gap-3">
+  <div>
+    <div className="text-xs text-slate-500">Feet</div>
+    <Input
+      type="number"
+      min="0"
+      step="0.01"
+      value={secondaryFeet}
+      onChange={(e) => {
+        const nextFeet = e.target.value;
+        setSecondaryFeet(nextFeet);
+
+        const secondaryLf =
+          Number(nextFeet || 0) +
+          Number(secondaryInches || 0) / 12;
+
+        save(
+          { secondary_lf: secondaryLf },
+          { recalc: true }
+        );
+      }}
+    />
+  </div>
+
+  <div>
+    <div className="text-xs text-slate-500">Inches</div>
+    <Input
+      type="number"
+      min="0"
+      step="0.01"
+      value={secondaryInches}
+      onChange={(e) => {
+        const nextInches = e.target.value;
+        setSecondaryInches(nextInches);
+
+        const secondaryLf =
+          Number(secondaryFeet || 0) +
+          Number(nextInches || 0) / 12;
+
+        save(
+          { secondary_lf: secondaryLf },
+          { recalc: true }
+        );
+      }}
+    />
+  </div>
+</div>
+
+<div className="mt-1 text-xs text-slate-500">
+  Total: {Number(pricing.secondary_lf || 0).toFixed(2)} LF
+</div>
                 </div>
               </>
             )}
