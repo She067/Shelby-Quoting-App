@@ -14,7 +14,7 @@ function cellKey(styleId, finishId) {
 }
 
 export default function PricingManagerPage() {
-    const nav = useNavigate();
+  const nav = useNavigate();
   const [loading, setLoading] = useState(true);
 
 
@@ -22,6 +22,8 @@ export default function PricingManagerPage() {
   const [savingRates, setSavingRates] = useState(false);
   const [savingTiers, setSavingTiers] = useState(false);
   const [savingTypeDefaults, setSavingTypeDefaults] = useState(false);
+  const [savingHardwareMarkup, setSavingHardwareMarkup] = useState(false);
+  const [hardwareMarkup, setHardwareMarkup] = useState("10");
 
   // Data lists
   const [tiers, setTiers] = useState([]);
@@ -60,14 +62,14 @@ export default function PricingManagerPage() {
       supabase.from("pricing_tiers").select("id,name,is_active").order("name", { ascending: true }),
       supabase.from("pricing_versions").select("id,name,is_active").order("name", { ascending: true }),
       supabase
-  .from("cabinet_styles")
-  .select("id,name,sort_order")
-  .order("sort_order", { ascending: true }),
+        .from("cabinet_styles")
+        .select("id,name,sort_order")
+        .order("sort_order", { ascending: true }),
 
       supabase
-  .from("finish_types")
-  .select("id,name,sort_order")
-  .order("sort_order", { ascending: true }),
+        .from("finish_types")
+        .select("id,name,sort_order")
+        .order("sort_order", { ascending: true }),
 
       supabase
         .from("customer_types")
@@ -93,6 +95,18 @@ export default function PricingManagerPage() {
     setStyles(styleList);
     setFinishes(finishList);
     setCustomerTypes(typeList);
+
+    const { data: hardwareSetting, error: hardwareSettingError } = await supabase
+      .from("pricing_settings")
+      .select("numeric_value")
+      .eq("setting_key", "hardware_markup_percent")
+      .single();
+
+    if (hardwareSettingError) {
+      console.warn("Error loading hardware markup:", hardwareSettingError);
+    } else {
+      setHardwareMarkup(String(hardwareSetting?.numeric_value ?? 10));
+    }
 
     // Defaults for matrix selectors
     const activeTier = tierList.find((x) => x.is_active) || tierList[0];
@@ -255,31 +269,54 @@ export default function PricingManagerPage() {
   }
 
   async function saveTypeDefaults() {
-  if (!typeDefaultsDirty) return;
+    if (!typeDefaultsDirty) return;
 
-  setSavingTypeDefaults(true);
-  try {
-    const updates = Object.entries(typeDefaultEdits);
+    setSavingTypeDefaults(true);
+    try {
+      const updates = Object.entries(typeDefaultEdits);
 
-    for (const [id, defaultTierId] of updates) {
-      const { error } = await supabase
-        .from("customer_types")
-        .update({ default_tier_id: defaultTierId || null })
-        .eq("id", id);
+      for (const [id, defaultTierId] of updates) {
+        const { error } = await supabase
+          .from("customer_types")
+          .update({ default_tier_id: defaultTierId || null })
+          .eq("id", id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
+
+      setTypeDefaultEdits({});
+      await loadBase();
+      alert("Customer type defaults saved.");
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Failed to save defaults");
+    } finally {
+      setSavingTypeDefaults(false);
+    }
+  }
+
+  async function saveHardwareMarkup() {
+    setSavingHardwareMarkup(true);
+
+    const numericMarkup = Number(hardwareMarkup || 0);
+
+    const { error } = await supabase
+      .from("pricing_settings")
+      .update({
+        numeric_value: numericMarkup,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("setting_key", "hardware_markup_percent");
+
+    setSavingHardwareMarkup(false);
+
+    if (error) {
+      alert(error.message);
+      return;
     }
 
-    setTypeDefaultEdits({});
-    await loadBase();
-    alert("Customer type defaults saved.");
-  } catch (e) {
-    console.error(e);
-    alert(e.message || "Failed to save defaults");
-  } finally {
-    setSavingTypeDefaults(false);
+    alert("Hardware markup saved.");
   }
-}
 
 
   if (loading) return <div className="p-6">Loading…</div>;
@@ -289,10 +326,10 @@ export default function PricingManagerPage() {
       title="Pricing Manager"
       subtitle="Create tiers, edit rate-per-LF matrix, and set default tiers per customer type."
       actions={
-  <Button variant="secondary" onClick={() => nav("/customers")}>
-    Back
-  </Button>
-}
+        <Button variant="secondary" onClick={() => nav("/customers")}>
+          Back
+        </Button>
+      }
 
     >
       <div className="grid lg:grid-cols-3 gap-4">
@@ -397,11 +434,10 @@ export default function PricingManagerPage() {
                         <div className="text-xs text-slate-500">Active</div>
                         <button
                           type="button"
-                          className={`px-3 py-1 rounded-lg text-sm border ${
-                            isActive
-                              ? "bg-slate-900 text-white border-slate-900"
-                              : "bg-white text-slate-700 border-slate-200"
-                          }`}
+                          className={`px-3 py-1 rounded-lg text-sm border ${isActive
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-white text-slate-700 border-slate-200"
+                            }`}
                           onClick={() => markTierEdit(t.id, { is_active: !isActive })}
                         >
                           {isActive ? "Yes" : "No"}
@@ -415,14 +451,14 @@ export default function PricingManagerPage() {
               {tiers.length === 0 ? <div className="text-sm text-slate-500">No tiers yet.</div> : null}
             </div>
             <div className="pt-2 flex justify-end">
-  <Button
-    variant="secondary"
-    disabled={tierDirtyCount === 0 || savingTiers}
-    onClick={saveTierEdits}
-  >
-    {savingTiers ? "Saving…" : tierDirtyCount ? `Save Tiers (${tierDirtyCount})` : "Save Tiers"}
-  </Button>
-</div>
+              <Button
+                variant="secondary"
+                disabled={tierDirtyCount === 0 || savingTiers}
+                onClick={saveTierEdits}
+              >
+                {savingTiers ? "Saving…" : tierDirtyCount ? `Save Tiers (${tierDirtyCount})` : "Save Tiers"}
+              </Button>
+            </div>
 
           </CardBody>
         </Card>
@@ -465,49 +501,49 @@ export default function PricingManagerPage() {
             </div>
 
             <div className="border rounded-2xl overflow-hidden">
-  <table className="min-w-full">
-    <thead className="bg-slate-100">
-      <tr>
-        <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
-          Cabinet Style
-        </th>
-        <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
-          Finish
-        </th>
-        <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
-          Rate per LF
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      {styles.map((s) =>
-        finishes.map((f) => {
-          const k = cellKey(s.id, f.id);
-          const val = ratesMap[k];
+              <table className="min-w-full">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
+                      Cabinet Style
+                    </th>
+                    <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
+                      Finish
+                    </th>
+                    <th className="text-left text-xs font-semibold text-slate-600 px-3 py-2 border-b">
+                      Rate per LF
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {styles.map((s) =>
+                    finishes.map((f) => {
+                      const k = cellKey(s.id, f.id);
+                      const val = ratesMap[k];
 
-          return (
-            <tr key={k} className="border-b last:border-0">
-              <td className="px-3 py-2 text-sm text-slate-800">
-                {s.name}
-              </td>
-              <td className="px-3 py-2 text-sm text-slate-600">
-                {f.name}
-              </td>
-              <td className="px-3 py-2">
-                <input
-                  className="w-32 border rounded-lg px-2 py-1 text-sm tabular-nums"
-                  value={val === undefined ? "" : fmtRate(val)}
-                  placeholder="—"
-                  onChange={(e) => setCell(s.id, f.id, e.target.value)}
-                />
-              </td>
-            </tr>
-          );
-        })
-      )}
-    </tbody>
-  </table>
-</div>
+                      return (
+                        <tr key={k} className="border-b last:border-0">
+                          <td className="px-3 py-2 text-sm text-slate-800">
+                            {s.name}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-slate-600">
+                            {f.name}
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              className="w-32 border rounded-lg px-2 py-1 text-sm tabular-nums"
+                              value={val === undefined ? "" : fmtRate(val)}
+                              placeholder="—"
+                              onChange={(e) => setCell(s.id, f.id, e.target.value)}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
 
             <div className="flex items-center justify-between pt-2">
@@ -518,6 +554,40 @@ export default function PricingManagerPage() {
                 {savingRates ? "Saving…" : "Save Rates"}
               </Button>
             </div>
+          </CardBody>
+        </Card>
+        {/* Hardware Markup */}
+        <Card className="lg:col-span-1">
+          <CardHeader title="Hardware Markup" />
+          <CardBody className="space-y-3">
+            <div className="text-sm text-slate-600">
+              Default markup added to knobs, pulls, and other hardware.
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">
+                Hardware Markup %
+              </label>
+
+              <div className="mt-1 flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={hardwareMarkup}
+                  onChange={(e) => setHardwareMarkup(e.target.value)}
+                />
+
+                <span className="text-slate-600">%</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={saveHardwareMarkup}
+              disabled={savingHardwareMarkup}
+            >
+              {savingHardwareMarkup ? "Saving…" : "Save Hardware Markup"}
+            </Button>
           </CardBody>
         </Card>
       </div>

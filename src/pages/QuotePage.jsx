@@ -42,7 +42,7 @@ export default function QuotePage() {
   const [quote, setQuote] = useState(null);
 
   const customerHref = useMemo(() => {
-  return quote?.customer_id ? `/customers/${quote.customer_id}` : "/customers";
+    return quote?.customer_id ? `/customers/${quote.customer_id}` : "/customers";
   }, [quote?.customer_id]);
 
   const [planDoc, setPlanDoc] = useState(null);
@@ -71,6 +71,16 @@ export default function QuotePage() {
   const [renameRoom, setRenameRoom] = useState(null);
   const [renameValue, setRenameValue] = useState("");
 
+  const [hardwareRows, setHardwareRows] = useState([]);
+  const [hardwareMarkup, setHardwareMarkup] = useState(10);
+
+  const [hardwareSuppliers, setHardwareSuppliers] = useState([]);
+  const [newHardwareSupplierId, setNewHardwareSupplierId] = useState("");
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+
+  const [newHardwareDescription, setNewHardwareDescription] = useState("");
+  const [newHardwareCost, setNewHardwareCost] = useState("");
   const [recalcBusy, setRecalcBusy] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
 
@@ -144,33 +154,33 @@ export default function QuotePage() {
   }
 
   async function loadVariantData(roomVariantId, roomIds) {
-  if (!roomVariantId) return;
+    if (!roomVariantId) return;
 
-  const safeRoomIds = (roomIds ?? []).filter((x) => typeof x === "string" && x.length > 0);
-  if (!safeRoomIds.length) {
-    setPricingMap({});
-    setExtrasByRoomId({});
-    return;
-  }
+    const safeRoomIds = (roomIds ?? []).filter((x) => typeof x === "string" && x.length > 0);
+    if (!safeRoomIds.length) {
+      setPricingMap({});
+      setExtrasByRoomId({});
+      return;
+    }
 
-  const { data: ps, error: psErr } = await supabase
-    .from("variant_room_pricing")
-    .select("*")
-    .eq("room_variant_id", roomVariantId)
-    .in("room_id", safeRoomIds);
+    const { data: ps, error: psErr } = await supabase
+      .from("variant_room_pricing")
+      .select("*")
+      .eq("room_variant_id", roomVariantId)
+      .in("room_id", safeRoomIds);
 
-  if (psErr) console.error("variant_room_pricing load error:", psErr);
+    if (psErr) console.error("variant_room_pricing load error:", psErr);
 
-  const pMap = {};
-  (ps ?? []).forEach((row) => {
-    if (!row.room_id) return;
-    pMap[row.room_id] = row;
-  });
-  setPricingMap(pMap);
+    const pMap = {};
+    (ps ?? []).forEach((row) => {
+      if (!row.room_id) return;
+      pMap[row.room_id] = row;
+    });
+    setPricingMap(pMap);
 
-  const { data: ex, error: exErr } = await supabase
-    .from("variant_room_extras")
-    .select(`
+    const { data: ex, error: exErr } = await supabase
+      .from("variant_room_extras")
+      .select(`
       room_id,
       quantity,
       override_value,
@@ -181,123 +191,158 @@ export default function QuotePage() {
         is_active
       )
     `)
-    .eq("room_variant_id", roomVariantId)
-    .in("room_id", safeRoomIds);
+      .eq("room_variant_id", roomVariantId)
+      .in("room_id", safeRoomIds);
 
-  if (exErr) console.warn("variant_room_extras load error:", exErr.message);
+    if (exErr) console.warn("variant_room_extras load error:", exErr.message);
 
-  const eMap = {};
-  (ex ?? []).forEach((row) => {
-    const rid = row.room_id;
-    const name = row.extras_catalog?.name;
-    if (!rid || !name) return;
+    const eMap = {};
+    (ex ?? []).forEach((row) => {
+      const rid = row.room_id;
+      const name = row.extras_catalog?.name;
+      if (!rid || !name) return;
 
-    const qty = Number(row.quantity || 1);
-    const showQty = !!row.extras_catalog?.allows_quantity;
-    const label = showQty && qty > 1 ? `${name} (${qty})` : name;
+      const qty = Number(row.quantity || 1);
+      const showQty = !!row.extras_catalog?.allows_quantity;
+      const label = showQty && qty > 1 ? `${name} (${qty})` : name;
 
-    eMap[rid] = eMap[rid] ?? [];
-    eMap[rid].push(label);
-  });
-  setExtrasByRoomId(eMap);
-}
+      eMap[rid] = eMap[rid] ?? [];
+      eMap[rid].push(label);
+    });
+    setExtrasByRoomId(eMap);
+  }
 
 
- async function load() {
-  setLoading(true);
+  async function load() {
+    setLoading(true);
 
-  try {
-    const { data: q, error: qErr } = await supabase
-      .from("quotes")
-      .select("id,quote_number,project_name,site_address,status,customer_id,created_at,tier_id")
-      .eq("id", id)
-      .single();
+    try {
+      const { data: q, error: qErr } = await supabase
+        .from("quotes")
+        .select("id,quote_number,project_name,site_address,status,customer_id,created_at,tier_id")
+        .eq("id", id)
+        .single();
 
-    if (qErr) throw qErr;
-    setQuote(q);
+      if (qErr) throw qErr;
+      setQuote(q);
 
-    const { data: pd, error: pdErr } = await supabase
-      .from("quote_plan_documents")
-      .select("id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number")
-      .eq("quote_id", q.id)
-      .maybeSingle();
+      const { data: pd, error: pdErr } = await supabase
+        .from("quote_plan_documents")
+        .select("id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number")
+        .eq("quote_id", q.id)
+        .maybeSingle();
 
-    if (pdErr) throw pdErr;
-    setPlanDoc(pd ?? null);
+      if (pdErr) throw pdErr;
+      setPlanDoc(pd ?? null);
 
-    const { data: tierList, error: tErr } = await supabase
-      .from("pricing_tiers")
-      .select("id,name,is_active")
-      .eq("is_active", true)
-      .order("name", { ascending: true });
-    if (tErr) throw tErr;
-    setTiers(tierList ?? []);
+      const { data: tierList, error: tErr } = await supabase
+        .from("pricing_tiers")
+        .select("id,name,is_active")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      if (tErr) throw tErr;
+      setTiers(tierList ?? []);
 
-    const { data: cust, error: custErr } = await supabase
-      .from("customers")
-      .select(`
+      const { data: cust, error: custErr } = await supabase
+        .from("customers")
+        .select(`
         id,
         customer_types (
           id,
           default_tier_id
         )
       `)
-      .eq("id", q.customer_id)
-      .single();
-    if (custErr) throw custErr;
-    setDefaultTierId(cust?.customer_types?.default_tier_id ?? null);
+        .eq("id", q.customer_id)
+        .single();
+      if (custErr) throw custErr;
+      setDefaultTierId(cust?.customer_types?.default_tier_id ?? null);
 
-    const variantInfo = await ensureBaseVariant(q);
+      const variantInfo = await ensureBaseVariant(q);
 
-    const { data: r, error: rErr } = await supabase
-  .from("quote_rooms")
-  .select("id,name,created_at,sort_order")
-  .eq("quote_id", id)
-  .order("sort_order", { ascending: true })
-  .order("created_at", { ascending: true });
-    if (rErr) throw rErr;
+      const { data: r, error: rErr } = await supabase
+        .from("quote_rooms")
+        .select("id,name,created_at,sort_order")
+        .eq("quote_id", id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (rErr) throw rErr;
 
-    const roomList = r ?? [];
-    setRooms(roomList);
+      const roomList = r ?? [];
+      setRooms(roomList);
 
-    const roomIds = roomList.map((x) => x.id);
+      const roomIds = roomList.map((x) => x.id);
 
-    if (roomIds.length) {
-      const { data: segs, error: sErr } = await supabase
-        .from("room_plan_segments")
-        .select("quote_room_id, lf_length")
-        .in("quote_room_id", roomIds);
+      if (roomIds.length) {
+        const { data: segs, error: sErr } = await supabase
+          .from("room_plan_segments")
+          .select("quote_room_id, lf_length")
+          .in("quote_room_id", roomIds);
 
-      if (sErr) throw sErr;
+        if (sErr) throw sErr;
 
-      const totals = {};
-      (segs ?? []).forEach((s) => {
-        totals[s.quote_room_id] = (totals[s.quote_room_id] ?? 0) + Number(s.lf_length || 0);
-      });
-      setSegmentTotals(totals);
-    } else {
-      setSegmentTotals({});
+        const totals = {};
+        (segs ?? []).forEach((s) => {
+          totals[s.quote_room_id] = (totals[s.quote_room_id] ?? 0) + Number(s.lf_length || 0);
+        });
+        setSegmentTotals(totals);
+      } else {
+        setSegmentTotals({});
+      }
+
+      const [{ data: styles, error: stErr }, { data: finishes, error: fnErr }] = await Promise.all([
+        supabase.from("cabinet_styles").select("id,name"),
+        supabase.from("finish_types").select("id,name"),
+      ]);
+
+      if (stErr) throw stErr;
+      if (fnErr) throw fnErr;
+
+      setStyleMap(Object.fromEntries((styles ?? []).map((s) => [s.id, s.name])));
+      setFinishMap(Object.fromEntries((finishes ?? []).map((f) => [f.id, f.name])));
+
+      const { data: hardwareSetting, error: hardwareSettingError } = await supabase
+        .from("pricing_settings")
+        .select("numeric_value")
+        .eq("setting_key", "hardware_markup_percent")
+        .single();
+
+      if (hardwareSettingError) {
+        console.warn("Error loading hardware markup:", hardwareSettingError);
+      } else {
+        setHardwareMarkup(Number(hardwareSetting?.numeric_value ?? 10));
+      }
+
+      const { data: hardwareData, error: hardwareError } = await supabase
+        .from("quote_hardware")
+        .select("*")
+        .eq("quote_id", id)
+        .order("created_at", { ascending: true });
+
+      if (hardwareError) {
+        console.warn("Error loading quote hardware:", hardwareError);
+      } else {
+        setHardwareRows(hardwareData || []);
+      }
+
+      const { data: supplierData, error: supplierError } = await supabase
+        .from("hardware_suppliers")
+        .select("id, name")
+        .order("name", { ascending: true });
+
+      if (supplierError) {
+        console.warn("Error loading hardware suppliers:", supplierError);
+      } else {
+        setHardwareSuppliers(supplierData || []);
+      }
+
+      await loadVariantData(variantInfo.selectedId, roomIds);
+    } catch (e) {
+      console.error("QuotePage load failed:", e);
+      alert(e?.message || "QuotePage failed to load. Check console for details.");
+    } finally {
+      setLoading(false);
     }
-
-    const [{ data: styles, error: stErr }, { data: finishes, error: fnErr }] = await Promise.all([
-      supabase.from("cabinet_styles").select("id,name"),
-      supabase.from("finish_types").select("id,name"),
-    ]);
-
-    if (stErr) throw stErr;
-    if (fnErr) throw fnErr;
-
-    setStyleMap(Object.fromEntries((styles ?? []).map((s) => [s.id, s.name])));
-    setFinishMap(Object.fromEntries((finishes ?? []).map((f) => [f.id, f.name])));
-
-    await loadVariantData(variantInfo.selectedId, roomIds);
-  } catch (e) {
-    console.error("QuotePage load failed:", e);
-    alert(e?.message || "QuotePage failed to load. Check console for details.");
-  } finally {
-    setLoading(false);
   }
-}
 
 
   useEffect(() => {
@@ -330,178 +375,295 @@ export default function QuotePage() {
   }, [rooms, pricingMap]);
 
   const quoteTotal = useMemo(() => {
-    return rooms.reduce((sum, r) => sum + Number(pricingMap?.[r.id]?.room_subtotal || 0), 0);
+    return rooms.reduce(
+      (sum, r) => sum + Number(pricingMap?.[r.id]?.room_subtotal || 0),
+      0
+    );
   }, [rooms, pricingMap]);
 
-  async function addRoom() {
-  if (!roomName.trim()) return alert("Room name required");
+  const hardwareCostTotal = useMemo(() => {
+    return hardwareRows.reduce(
+      (sum, row) => sum + Number(row.cost || 0),
+      0
+    );
+  }, [hardwareRows]);
 
-  console.log("ADD ROOM clicked", { quote_id: id, roomName, selectedVariantId });
+  const hardwareBillTotal = useMemo(() => {
+    return hardwareRows.reduce((sum, row) => {
+      const cost = Number(row.cost || 0);
+      const markup = Number(row.markup_percent || 0);
 
-  const res = await supabase
-    .from("quote_rooms")
-.insert({
-  quote_id: id,
-  name: roomName.trim(),
-  sort_order: rooms.length,
-})
-.select("id,name,created_at,sort_order")
-    .single();
+      return sum + cost * (1 + markup / 100);
+    }, 0);
+  }, [hardwareRows]);
 
-  console.log("ADD ROOM result:", res);
+  const hardwareMarkupTotal = hardwareBillTotal - hardwareCostTotal;
 
-  const { data, error } = res;
+  const combinedQuoteTotal = quoteTotal + hardwareBillTotal;
 
-  if (error) {
-    console.error("ADD ROOM ERROR FULL:", error);
-    alert(`${error.message}\n\ncode: ${error.code || "—"}\nhint: ${error.hint || "—"}\ndetails: ${error.details || "—"}`);
-    return;
-  }
+  async function addHardwareSupplier() {
+    const name = newSupplierName.trim();
 
-  setRooms((prev) => [...prev, data]);
-  setRoomName("");
-  setShowAdd(false);
-
-  if (selectedVariantId) {
-    const pr = await supabase.from("variant_room_pricing").insert({
-      room_variant_id: selectedVariantId,
-      room_id: data.id,
-      lf_source: "manual",
-      manual_lf: 0,
-      has_mixed_finish: false,
-    });
-
-    console.log("ADD ROOM pricing row insert:", pr);
-
-    if (pr.error) {
-      console.error("PRICING ROW INSERT ERROR:", pr.error);
-      alert(`Pricing row insert failed:\n${pr.error.message}`);
+    if (!name) {
+      alert("Enter a supplier name.");
       return;
     }
 
-    await loadVariantData(selectedVariantId, [...rooms.map((r) => r.id), data.id]);
-  }
-}
+    const { data, error } = await supabase
+      .from("hardware_suppliers")
+      .insert({ name })
+      .select("id, name")
+      .single();
 
-function openRenameRoom(room) {
-  setRenameRoom(room);
-  setRenameValue(room.name || "");
-}
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
-async function saveRoomName() {
-  const nextName = renameValue.trim();
+    setHardwareSuppliers((prev) =>
+      [...prev, data].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    );
 
-  if (!renameRoom?.id || !nextName) {
-    alert("Room name is required.");
-    return;
-  }
-
-  const { error } = await supabase
-    .from("quote_rooms")
-    .update({ name: nextName })
-    .eq("id", renameRoom.id);
-
-  if (error) {
-    alert(error.message);
-    return;
+    setNewHardwareSupplierId(data.id);
+    setNewSupplierName("");
+    setShowAddSupplier(false);
   }
 
-  setRooms((currentRooms) =>
-    currentRooms.map((room) =>
-      room.id === renameRoom.id
-        ? { ...room, name: nextName }
-        : room
-    )
-  );
+  async function addHardwareLine() {
+    const supplierId = newHardwareSupplierId;
+    const selectedSupplier = hardwareSuppliers.find(
+      (supplier) => supplier.id === supplierId
+    );
 
-  setRenameRoom(null);
-  setRenameValue("");
-}
+    const supplier = selectedSupplier?.name || "";
+    const description = newHardwareDescription.trim();
+    const cost = Number(newHardwareCost || 0);
 
-async function deleteRoom(room) {
-  if (!room?.id) return;
+    if (!supplierId || !supplier) {
+      alert("Select a supplier.");
+      return;
+    }
 
-  const confirmed = window.confirm(
-    `Delete "${room.name}"?\n\nThis cannot be undone.`
-  );
+    if (cost <= 0) {
+      alert("Enter a hardware cost greater than 0.");
+      return;
+    }
 
-  if (!confirmed) return;
+    const { data, error } = await supabase
+      .from("quote_hardware")
+      .insert({
+        quote_id: id,
+        supplier_id: supplierId,
+        supplier,
+        description: description || null,
+        cost,
+        markup_percent: hardwareMarkup,
+      })
+      .select()
+      .single();
 
-  // Delete child records first
-  await supabase
-    .from("variant_room_extras")
-    .delete()
-    .eq("room_id", room.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
-  await supabase
-    .from("variant_room_pricing")
-    .delete()
-    .eq("room_id", room.id);
+    setHardwareRows((prev) => [...prev, data]);
 
-  await supabase
-    .from("room_extras")
-    .delete()
-    .eq("quote_room_id", room.id);
-
-  await supabase
-    .from("room_pricing")
-    .delete()
-    .eq("quote_room_id", room.id);
-
-  await supabase
-    .from("room_plan_segments")
-    .delete()
-    .eq("quote_room_id", room.id);
-
-  const { error } = await supabase
-    .from("quote_rooms")
-    .delete()
-    .eq("id", room.id);
-
-  if (error) {
-    alert(error.message);
-    return;
+    setNewHardwareSupplierId("");
+    setNewHardwareDescription("");
+    setNewHardwareCost("");
   }
 
-  setRooms((rooms) => rooms.filter((r) => r.id !== room.id));
-}
+  async function deleteHardwareLine(hardwareId) {
+    const confirmed = window.confirm("Delete this hardware line?");
+    if (!confirmed) return;
 
-async function moveRoom(roomId, direction) {
-  const currentIndex = rooms.findIndex((room) => room.id === roomId);
-  if (currentIndex === -1) return;
+    const { error } = await supabase
+      .from("quote_hardware")
+      .delete()
+      .eq("id", hardwareId);
 
-  const targetIndex =
-    direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
-  if (targetIndex < 0 || targetIndex >= rooms.length) return;
-
-  const reordered = [...rooms];
-  const [movedRoom] = reordered.splice(currentIndex, 1);
-  reordered.splice(targetIndex, 0, movedRoom);
-
-  const normalized = reordered.map((room, index) => ({
-    ...room,
-    sort_order: index,
-  }));
-
-  setRooms(normalized);
-
-  const results = await Promise.all(
-    normalized.map((room) =>
-      supabase
-        .from("quote_rooms")
-        .update({ sort_order: room.sort_order })
-        .eq("id", room.id)
-    )
-  );
-
-  const failed = results.find((result) => result.error);
-
-  if (failed?.error) {
-    alert(failed.error.message);
-    await load();
+    setHardwareRows((prev) =>
+      prev.filter((row) => row.id !== hardwareId)
+    );
   }
-}
+
+  async function addRoom() {
+    if (!roomName.trim()) return alert("Room name required");
+
+    console.log("ADD ROOM clicked", { quote_id: id, roomName, selectedVariantId });
+
+    const res = await supabase
+      .from("quote_rooms")
+      .insert({
+        quote_id: id,
+        name: roomName.trim(),
+        sort_order: rooms.length,
+      })
+      .select("id,name,created_at,sort_order")
+      .single();
+
+    console.log("ADD ROOM result:", res);
+
+    const { data, error } = res;
+
+    if (error) {
+      console.error("ADD ROOM ERROR FULL:", error);
+      alert(`${error.message}\n\ncode: ${error.code || "—"}\nhint: ${error.hint || "—"}\ndetails: ${error.details || "—"}`);
+      return;
+    }
+
+    setRooms((prev) => [...prev, data]);
+    setRoomName("");
+    setShowAdd(false);
+
+    if (selectedVariantId) {
+      const pr = await supabase.from("variant_room_pricing").insert({
+        room_variant_id: selectedVariantId,
+        room_id: data.id,
+        lf_source: "manual",
+        manual_lf: 0,
+        has_mixed_finish: false,
+      });
+
+      console.log("ADD ROOM pricing row insert:", pr);
+
+      if (pr.error) {
+        console.error("PRICING ROW INSERT ERROR:", pr.error);
+        alert(`Pricing row insert failed:\n${pr.error.message}`);
+        return;
+      }
+
+      await loadVariantData(selectedVariantId, [...rooms.map((r) => r.id), data.id]);
+    }
+  }
+
+  function openRenameRoom(room) {
+    setRenameRoom(room);
+    setRenameValue(room.name || "");
+  }
+
+  async function saveRoomName() {
+    const nextName = renameValue.trim();
+
+    if (!renameRoom?.id || !nextName) {
+      alert("Room name is required.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("quote_rooms")
+      .update({ name: nextName })
+      .eq("id", renameRoom.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setRooms((currentRooms) =>
+      currentRooms.map((room) =>
+        room.id === renameRoom.id
+          ? { ...room, name: nextName }
+          : room
+      )
+    );
+
+    setRenameRoom(null);
+    setRenameValue("");
+  }
+
+  async function deleteRoom(room) {
+    if (!room?.id) return;
+
+    const confirmed = window.confirm(
+      `Delete "${room.name}"?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    // Delete child records first
+    await supabase
+      .from("variant_room_extras")
+      .delete()
+      .eq("room_id", room.id);
+
+    await supabase
+      .from("variant_room_pricing")
+      .delete()
+      .eq("room_id", room.id);
+
+    await supabase
+      .from("room_extras")
+      .delete()
+      .eq("quote_room_id", room.id);
+
+    await supabase
+      .from("room_pricing")
+      .delete()
+      .eq("quote_room_id", room.id);
+
+    await supabase
+      .from("room_plan_segments")
+      .delete()
+      .eq("quote_room_id", room.id);
+
+    const { error } = await supabase
+      .from("quote_rooms")
+      .delete()
+      .eq("id", room.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setRooms((rooms) => rooms.filter((r) => r.id !== room.id));
+  }
+
+  async function moveRoom(roomId, direction) {
+    const currentIndex = rooms.findIndex((room) => room.id === roomId);
+    if (currentIndex === -1) return;
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= rooms.length) return;
+
+    const reordered = [...rooms];
+    const [movedRoom] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, movedRoom);
+
+    const normalized = reordered.map((room, index) => ({
+      ...room,
+      sort_order: index,
+    }));
+
+    setRooms(normalized);
+
+    const results = await Promise.all(
+      normalized.map((room) =>
+        supabase
+          .from("quote_rooms")
+          .update({ sort_order: room.sort_order })
+          .eq("id", room.id)
+      )
+    );
+
+    const failed = results.find((result) => result.error);
+
+    if (failed?.error) {
+      alert(failed.error.message);
+      await load();
+    }
+  }
 
   async function createVariantClone() {
     if (!quote?.id) return;
@@ -579,112 +741,112 @@ async function moveRoom(roomId, direction) {
   }
 
   async function deleteSelectedVariant() {
-  if (!selectedVariantId) return;
+    if (!selectedVariantId) return;
 
-  const v = variants.find((x) => x.id === selectedVariantId);
-  if (!v) return;
+    const v = variants.find((x) => x.id === selectedVariantId);
+    if (!v) return;
 
-  if (v.is_base) {
-    alert("You can’t delete the Base variant.");
-    return;
-  }
-
-  const ok = window.confirm(
-    `Delete variant "${v.name}"?\n\nThis will remove all saved pricing + extras for this variant.`
-  );
-  if (!ok) return;
-
-  setVariantBusy(true);
-  try {
-    const { error: eErr } = await supabase
-      .from("variant_room_extras")
-      .delete()
-      .eq("room_variant_id", selectedVariantId);
-    if (eErr) throw eErr;
-
-    const { error: pErr } = await supabase
-      .from("variant_room_pricing")
-      .delete()
-      .eq("room_variant_id", selectedVariantId);
-    if (pErr) throw pErr;
-
-    const { error: vErr } = await supabase
-      .from("room_variants")
-      .delete()
-      .eq("id", selectedVariantId);
-    if (vErr) throw vErr;
-
-    // reload variants
-    const { data: list, error } = await supabase
-      .from("room_variants")
-      .select("id,quote_id,name,is_base,sort_order,tier_id")
-      .eq("quote_id", quote.id)
-      .order("sort_order", { ascending: true });
-
-    if (error) throw error;
-
-    const sorted = (list ?? []).sort((a, b) => {
-      if (a.is_base && !b.is_base) return -1;
-      if (!a.is_base && b.is_base) return 1;
-      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-    });
-
-    setVariants(sorted);
-
-    const baseId = sorted.find((x) => x.is_base)?.id ?? sorted[0]?.id ?? null;
-    setSelectedVariantId(baseId);
-
-    if (baseId && rooms?.length) {
-      await loadVariantData(baseId, rooms.map((r) => r.id));
+    if (v.is_base) {
+      alert("You can’t delete the Base variant.");
+      return;
     }
-  } catch (e) {
-    console.error(e);
-    alert(e.message || "Failed to delete variant.");
-  } finally {
-    setVariantBusy(false);
+
+    const ok = window.confirm(
+      `Delete variant "${v.name}"?\n\nThis will remove all saved pricing + extras for this variant.`
+    );
+    if (!ok) return;
+
+    setVariantBusy(true);
+    try {
+      const { error: eErr } = await supabase
+        .from("variant_room_extras")
+        .delete()
+        .eq("room_variant_id", selectedVariantId);
+      if (eErr) throw eErr;
+
+      const { error: pErr } = await supabase
+        .from("variant_room_pricing")
+        .delete()
+        .eq("room_variant_id", selectedVariantId);
+      if (pErr) throw pErr;
+
+      const { error: vErr } = await supabase
+        .from("room_variants")
+        .delete()
+        .eq("id", selectedVariantId);
+      if (vErr) throw vErr;
+
+      // reload variants
+      const { data: list, error } = await supabase
+        .from("room_variants")
+        .select("id,quote_id,name,is_base,sort_order,tier_id")
+        .eq("quote_id", quote.id)
+        .order("sort_order", { ascending: true });
+
+      if (error) throw error;
+
+      const sorted = (list ?? []).sort((a, b) => {
+        if (a.is_base && !b.is_base) return -1;
+        if (!a.is_base && b.is_base) return 1;
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      });
+
+      setVariants(sorted);
+
+      const baseId = sorted.find((x) => x.is_base)?.id ?? sorted[0]?.id ?? null;
+      setSelectedVariantId(baseId);
+
+      if (baseId && rooms?.length) {
+        await loadVariantData(baseId, rooms.map((r) => r.id));
+      }
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Failed to delete variant.");
+    } finally {
+      setVariantBusy(false);
+    }
   }
-}
 
 
   // NOTE: keeping your existing recalcAllRooms function as-is (not shown here)
   // If you want, paste your current recalcAllRooms into this file unchanged.
 
   async function recalcAllRooms() {
-  if (!selectedVariantId) return;
-  if (!rooms?.length) return;
+    if (!selectedVariantId) return;
+    if (!rooms?.length) return;
 
-  setRecalcBusy(true);
-  try {
-    // ✅ 1) Resolve tier correctly: variant -> quote -> default
-    const resolvedTierId = getResolvedTierId();
-    if (!resolvedTierId) {
-      alert("No tier resolved. Set a default tier for the customer type or choose a tier override.");
-      return;
-    }
+    setRecalcBusy(true);
+    try {
+      // ✅ 1) Resolve tier correctly: variant -> quote -> default
+      const resolvedTierId = getResolvedTierId();
+      if (!resolvedTierId) {
+        alert("No tier resolved. Set a default tier for the customer type or choose a tier override.");
+        return;
+      }
 
-    // ✅ 2) Active pricing version
-    const versionId = await getActivePricingVersionId();
+      // ✅ 2) Active pricing version
+      const versionId = await getActivePricingVersionId();
 
-    // ✅ 3) Pull pricing + extras for this variant
-    const roomIds = rooms.map((r) => r.id);
+      // ✅ 3) Pull pricing + extras for this variant
+      const roomIds = rooms.map((r) => r.id);
 
-    const { data: pricingRows, error: pErr } = await supabase
-      .from("variant_room_pricing")
-      .select("*")
-      .eq("room_variant_id", selectedVariantId)
-      .in("room_id", roomIds);
+      const { data: pricingRows, error: pErr } = await supabase
+        .from("variant_room_pricing")
+        .select("*")
+        .eq("room_variant_id", selectedVariantId)
+        .in("room_id", roomIds);
 
-    if (pErr) throw pErr;
+      if (pErr) throw pErr;
 
-    const pricingByRoomId = {};
-    (pricingRows ?? []).forEach((r) => {
-      pricingByRoomId[r.room_id] = r;
-    });
+      const pricingByRoomId = {};
+      (pricingRows ?? []).forEach((r) => {
+        pricingByRoomId[r.room_id] = r;
+      });
 
-    const { data: extrasRows, error: eErr } = await supabase
-      .from("variant_room_extras")
-      .select(
-        `
+      const { data: extrasRows, error: eErr } = await supabase
+        .from("variant_room_extras")
+        .select(
+          `
         room_id,
         quantity,
         override_value,
@@ -694,210 +856,210 @@ async function moveRoom(roomId, direction) {
           default_value
         )
       `
-      )
-      .eq("room_variant_id", selectedVariantId)
-      .in("room_id", roomIds);
+        )
+        .eq("room_variant_id", selectedVariantId)
+        .in("room_id", roomIds);
 
-    if (eErr) throw eErr;
+      if (eErr) throw eErr;
 
-    const extrasByRoom = {};
-    (extrasRows ?? []).forEach((row) => {
-      extrasByRoom[row.room_id] = extrasByRoom[row.room_id] ?? [];
-      extrasByRoom[row.room_id].push(row);
-    });
+      const extrasByRoom = {};
+      (extrasRows ?? []).forEach((row) => {
+        extrasByRoom[row.room_id] = extrasByRoom[row.room_id] ?? [];
+        extrasByRoom[row.room_id].push(row);
+      });
 
-    // ✅ 4) Recalc each room
-    for (const room of rooms) {
-      const p = pricingByRoomId[room.id];
+      // ✅ 4) Recalc each room
+      for (const room of rooms) {
+        const p = pricingByRoomId[room.id];
 
-      // If a pricing row doesn't exist, skip (or create one if you prefer)
-      if (!p) continue;
+        // If a pricing row doesn't exist, skip (or create one if you prefer)
+        if (!p) continue;
 
-      const effectiveLf = Number(segmentTotals?.[room.id] || 0);
-      const totalLf =
-        p.lf_source === "manual" ? Number(p.manual_lf || 0) : effectiveLf;
+        const effectiveLf = Number(segmentTotals?.[room.id] || 0);
+        const totalLf =
+          p.lf_source === "manual" ? Number(p.manual_lf || 0) : effectiveLf;
 
-      const cabinetStyleId = p.cabinet_style_id;
-      const finishTypeId = getPrimaryFinishId(p);
+        const cabinetStyleId = p.cabinet_style_id;
+        const finishTypeId = getPrimaryFinishId(p);
 
-      // If room isn't ready, set totals to 0 so it’s obvious
-      if (!totalLf || !cabinetStyleId || !finishTypeId) {
+        // If room isn't ready, set totals to 0 so it’s obvious
+        if (!totalLf || !cabinetStyleId || !finishTypeId) {
+          await supabase
+            .from("variant_room_pricing")
+            .update({
+              lf_subtotal: 0,
+              mixed_finish_delta: 0,
+              room_subtotal: 0,
+            })
+            .eq("room_variant_id", selectedVariantId)
+            .eq("room_id", room.id);
+
+          continue;
+        }
+
+        const primaryRate = await getRatePerLf({
+          tierId: resolvedTierId,
+          versionId,
+          cabinetStyleId,
+          finishTypeId,
+        });
+
+        const mixed = {
+          enabled: !!p.has_mixed_finish,
+          secondaryFinishTypeId: p.secondary_finish_id ?? null,
+          secondaryLf: Number(p.secondary_lf || 0),
+          secondaryRate: 0,
+        };
+
+        if (mixed.enabled && mixed.secondaryFinishTypeId && mixed.secondaryLf > 0) {
+          mixed.secondaryRate = await getRatePerLf({
+            tierId: resolvedTierId,
+            versionId,
+            cabinetStyleId,
+            finishTypeId: mixed.secondaryFinishTypeId,
+          });
+        }
+
+        // Extras for this room
+        const percentExtras = [];
+        const fixedExtras = [];
+
+        for (const row of extrasByRoom[room.id] ?? []) {
+          const extra = row.extras_catalog;
+          if (!extra) continue;
+
+          const qty = Number(row.quantity || 1);
+          const baseValue =
+            row.override_value !== null && row.override_value !== undefined
+              ? Number(row.override_value)
+              : Number(extra.default_value || 0);
+
+          if (extra.type === "percent") {
+            percentExtras.push({ value: baseValue }); // stored as 10 for 10%
+          } else {
+            fixedExtras.push({ value: baseValue * qty });
+          }
+        }
+
+        const result = calcRoomPricing({
+          totalLf,
+          primaryRate: Number(primaryRate || 0),
+          mixed,
+          percentExtras,
+          fixedExtras,
+          appliancePanelsTotal: 0,
+        });
+
         await supabase
           .from("variant_room_pricing")
           .update({
-            lf_subtotal: 0,
-            mixed_finish_delta: 0,
-            room_subtotal: 0,
+            lf_subtotal: result.lfSubtotal,
+            mixed_finish_delta: result.mixedDelta,
+            room_subtotal: result.finalSubtotal,
           })
           .eq("room_variant_id", selectedVariantId)
           .eq("room_id", room.id);
-
-        continue;
       }
 
-      const primaryRate = await getRatePerLf({
-        tierId: resolvedTierId,
+      // ✅ 5) Reload data so UI updates immediately
+      await loadVariantData(selectedVariantId, rooms.map((r) => r.id));
+
+      console.log("✅ Recalc done. Tier:", resolvedTierId, "Variant:", selectedVariantId);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Recalc failed.");
+    } finally {
+      setRecalcBusy(false);
+    }
+  }
+
+
+  async function getActivePricingVersionId() {
+    const { data, error } = await supabase
+      .from("pricing_versions")
+      .select("id")
+      .eq("is_active", true)
+      .single();
+
+    if (error) throw new Error("No active pricing version found.");
+    return data.id;
+  }
+
+  async function getRatePerLf({ tierId, versionId, cabinetStyleId, finishTypeId }) {
+    if (!tierId || !versionId || !cabinetStyleId || !finishTypeId) return 0;
+
+    const { data, error } = await supabase
+      .from("pricing_rates")
+      .select("rate_per_lf")
+      .eq("tier_id", tierId)
+      .eq("pricing_version_id", versionId)
+      .eq("cabinet_style_id", cabinetStyleId)
+      .eq("finish_type_id", finishTypeId)
+      .single();
+
+    if (error) {
+      console.warn("Rate lookup failed:", error.message, {
+        tierId,
         versionId,
         cabinetStyleId,
         finishTypeId,
       });
-
-      const mixed = {
-        enabled: !!p.has_mixed_finish,
-        secondaryFinishTypeId: p.secondary_finish_id ?? null,
-        secondaryLf: Number(p.secondary_lf || 0),
-        secondaryRate: 0,
-      };
-
-      if (mixed.enabled && mixed.secondaryFinishTypeId && mixed.secondaryLf > 0) {
-        mixed.secondaryRate = await getRatePerLf({
-          tierId: resolvedTierId,
-          versionId,
-          cabinetStyleId,
-          finishTypeId: mixed.secondaryFinishTypeId,
-        });
-      }
-
-      // Extras for this room
-      const percentExtras = [];
-      const fixedExtras = [];
-
-      for (const row of extrasByRoom[room.id] ?? []) {
-        const extra = row.extras_catalog;
-        if (!extra) continue;
-
-        const qty = Number(row.quantity || 1);
-        const baseValue =
-          row.override_value !== null && row.override_value !== undefined
-            ? Number(row.override_value)
-            : Number(extra.default_value || 0);
-
-        if (extra.type === "percent") {
-          percentExtras.push({ value: baseValue }); // stored as 10 for 10%
-        } else {
-          fixedExtras.push({ value: baseValue * qty });
-        }
-      }
-
-      const result = calcRoomPricing({
-        totalLf,
-        primaryRate: Number(primaryRate || 0),
-        mixed,
-        percentExtras,
-        fixedExtras,
-        appliancePanelsTotal: 0,
-      });
-
-      await supabase
-        .from("variant_room_pricing")
-        .update({
-          lf_subtotal: result.lfSubtotal,
-          mixed_finish_delta: result.mixedDelta,
-          room_subtotal: result.finalSubtotal,
-        })
-        .eq("room_variant_id", selectedVariantId)
-        .eq("room_id", room.id);
+      return 0;
     }
 
-    // ✅ 5) Reload data so UI updates immediately
-    await loadVariantData(selectedVariantId, rooms.map((r) => r.id));
-
-    console.log("✅ Recalc done. Tier:", resolvedTierId, "Variant:", selectedVariantId);
-  } catch (e) {
-    console.error(e);
-    alert(e.message || "Recalc failed.");
-  } finally {
-    setRecalcBusy(false);
+    return Number(data?.rate_per_lf || 0);
   }
-}
-
-
-async function getActivePricingVersionId() {
-  const { data, error } = await supabase
-    .from("pricing_versions")
-    .select("id")
-    .eq("is_active", true)
-    .single();
-
-  if (error) throw new Error("No active pricing version found.");
-  return data.id;
-}
-
-async function getRatePerLf({ tierId, versionId, cabinetStyleId, finishTypeId }) {
-  if (!tierId || !versionId || !cabinetStyleId || !finishTypeId) return 0;
-
-  const { data, error } = await supabase
-    .from("pricing_rates")
-    .select("rate_per_lf")
-    .eq("tier_id", tierId)
-    .eq("pricing_version_id", versionId)
-    .eq("cabinet_style_id", cabinetStyleId)
-    .eq("finish_type_id", finishTypeId)
-    .single();
-
-  if (error) {
-    console.warn("Rate lookup failed:", error.message, {
-      tierId,
-      versionId,
-      cabinetStyleId,
-      finishTypeId,
-    });
-    return 0;
-  }
-
-  return Number(data?.rate_per_lf || 0);
-}
 
   async function uploadQuotePlanPdf(file) {
-  if (!file) return;
-  if (!quote?.id) return alert("Quote not loaded yet.");
+    if (!file) return;
+    if (!quote?.id) return alert("Quote not loaded yet.");
 
-  setPlanBusy(true);
-  try {
-    const bucket = "quote-plans";
-    const cleanName = (file.name || "plan.pdf").replace(/[^\w.\-]+/g, "_");
-    const path = `${quote.id}/${Date.now()}_${cleanName}`;
+    setPlanBusy(true);
+    try {
+      const bucket = "quote-plans";
+      const cleanName = (file.name || "plan.pdf").replace(/[^\w.\-]+/g, "_");
+      const path = `${quote.id}/${Date.now()}_${cleanName}`;
 
-    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
-      upsert: false,
-      contentType: file.type || "application/pdf",
-    });
-    if (upErr) throw upErr;
+      const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
+        upsert: false,
+        contentType: file.type || "application/pdf",
+      });
+      if (upErr) throw upErr;
 
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-    const pdfUrl = pub?.publicUrl;
-    if (!pdfUrl) throw new Error("Failed to get public URL for uploaded plan.");
+      const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+      const pdfUrl = pub?.publicUrl;
+      if (!pdfUrl) throw new Error("Failed to get public URL for uploaded plan.");
 
-    const { data: upserted, error: docErr } = await supabase
-      .from("quote_plan_documents")
-      .upsert(
-        {
-          quote_id: quote.id,
-          pdf_url: pdfUrl,
-          storage_path: path,
-          original_filename: file.name || null,
-          file_name: file.name || null,
-          scale_feet_per_pixel: null,
-          scale_page_number: null,
-        },
-        { onConflict: "quote_id" }
-      )
-      .select(
-        "id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number"
-      )
-      .single();
+      const { data: upserted, error: docErr } = await supabase
+        .from("quote_plan_documents")
+        .upsert(
+          {
+            quote_id: quote.id,
+            pdf_url: pdfUrl,
+            storage_path: path,
+            original_filename: file.name || null,
+            file_name: file.name || null,
+            scale_feet_per_pixel: null,
+            scale_page_number: null,
+          },
+          { onConflict: "quote_id" }
+        )
+        .select(
+          "id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number"
+        )
+        .single();
 
-    if (docErr) throw docErr;
+      if (docErr) throw docErr;
 
-    setPlanDoc(upserted);
-    setPlanOpen(true);
-  } catch (e) {
-    console.error(e);
-    alert(e.message || "Plan upload failed.");
-  } finally {
-    setPlanBusy(false);
+      setPlanDoc(upserted);
+      setPlanOpen(true);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Plan upload failed.");
+    } finally {
+      setPlanBusy(false);
+    }
   }
-}
 
 
   async function savePlanScale({ scaleFeetPerPixel, scalePageNumber }) {
@@ -921,60 +1083,60 @@ async function getRatePerLf({ tierId, versionId, cabinetStyleId, finishTypeId })
   }
 
   async function savePlanPageCount(numPages) {
-  if (!planDoc?.id) return;
-  if (!numPages) return;
+    if (!planDoc?.id) return;
+    if (!numPages) return;
 
-  // Only update if missing or wrong
-  if (Number(planDoc.page_count || 0) === Number(numPages)) return;
+    // Only update if missing or wrong
+    if (Number(planDoc.page_count || 0) === Number(numPages)) return;
 
-  const { data, error } = await supabase
-    .from("quote_plan_documents")
-    .update({ page_count: Number(numPages) })
-    .eq("id", planDoc.id)
-    .select("id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number")
-    .single();
+    const { data, error } = await supabase
+      .from("quote_plan_documents")
+      .update({ page_count: Number(numPages) })
+      .eq("id", planDoc.id)
+      .select("id, quote_id, pdf_url, storage_path, original_filename, page_count, scale_feet_per_pixel, scale_page_number")
+      .single();
 
-  if (error) {
-    console.warn("Failed to update page_count:", error.message);
-    return;
+    if (error) {
+      console.warn("Failed to update page_count:", error.message);
+      return;
+    }
+
+    setPlanDoc(data);
   }
 
-  setPlanDoc(data);
-}
-
-if (loading && !quote) {
-  return (
-    <Page title="Quote">
-      <div className="p-4 text-slate-600">Loading…</div>
-    </Page>
-  );
-}
+  if (loading && !quote) {
+    return (
+      <Page title="Quote">
+        <div className="p-4 text-slate-600">Loading…</div>
+      </Page>
+    );
+  }
 
 
   return (
 
     <Page
       title={`Quote ${quote?.quote_number || ""}`}
-     actions={
-  <>
-    <Button type="button" variant="secondary" onClick={() => nav(customerHref)}>
-      ← Back
-    </Button>
+      actions={
+        <>
+          <Button type="button" variant="secondary" onClick={() => nav(customerHref)}>
+            ← Back
+          </Button>
 
-    <Button type="button" onClick={() => setShowAdd(true)}>
-      + Add Room
-    </Button>
+          <Button type="button" onClick={() => setShowAdd(true)}>
+            + Add Room
+          </Button>
 
-    <Button
-      type="button"
-      variant="primary"
-      disabled={rooms.length === 0}
-      onClick={() => nav(`/quotes/${id}/pdf?room_variant_id=${selectedVariantId || ""}`)}
-    >
-      PDF
-    </Button>
-  </>
-}
+          <Button
+            type="button"
+            variant="primary"
+            disabled={rooms.length === 0}
+            onClick={() => nav(`/quotes/${id}/pdf?room_variant_id=${selectedVariantId || ""}`)}
+          >
+            PDF
+          </Button>
+        </>
+      }
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 px-4 py-3 text-sm">
         <div className="flex flex-wrap items-center gap-2">
@@ -997,12 +1159,12 @@ if (loading && !quote) {
           </Button>
 
           <Button
-          variant="secondary"
-          size="sm"
-          disabled={variantBusy || !selectedVariantId || activeVariant?.is_base}
-          onClick={deleteSelectedVariant}
+            variant="secondary"
+            size="sm"
+            disabled={variantBusy || !selectedVariantId || activeVariant?.is_base}
+            onClick={deleteSelectedVariant}
           >
-          Delete Variant
+            Delete Variant
           </Button>
 
 
@@ -1039,39 +1201,53 @@ if (loading && !quote) {
           </Button>
         </div>
 
-        <div className="text-right">
-          <div className="text-slate-500">Quote Total</div>
-          <div className="font-semibold tabular-nums">${Number(quoteTotal || 0).toFixed(2)}</div>
+        <div className="text-right space-y-1">
+          <div>
+            <div className="text-slate-500">Cabinet Total</div>
+            <div className="font-semibold tabular-nums">
+              ${Number(quoteTotal || 0).toFixed(2)}
+            </div>
+          </div>
+
+          {hardwareBillTotal > 0 && (
+            <div>
+              <div className="text-slate-500">Hardware Total</div>
+              <div className="font-semibold tabular-nums">
+                ${Number(hardwareBillTotal || 0).toFixed(2)}
+              </div>
+            </div>
+          )}
         </div>
+
       </div>
 
       <Card className="mb-4">
         <CardHeader title="House Plan (Optional)" />
         <CardBody>
           {!planDoc ? (
-  <div className="flex flex-wrap items-center justify-between gap-3">
-    <div className="text-sm text-slate-600">
-      Upload a PDF plan to measure linear footage. This is optional.
-    </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-slate-600">
+                Upload a PDF plan to measure linear footage. This is optional.
+              </div>
 
-    <label className="cursor-pointer">
-      <input
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        disabled={planBusy}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) uploadQuotePlanPdf(f);
-          e.target.value = "";
-        }}
-      />
-      <span className="inline-flex items-center rounded-md bg-slate-800 text-white px-4 py-2 text-sm hover:bg-slate-700">
-        {planBusy ? "Uploading..." : "Upload Plan PDF"}
-      </span>
-    </label>
-  </div>
-) : (
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  disabled={planBusy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadQuotePlanPdf(f);
+                    e.target.value = "";
+                  }}
+                />
+                <span className="inline-flex items-center rounded-md bg-slate-800 text-white px-4 py-2 text-sm hover:bg-slate-700">
+                  {planBusy ? "Uploading..." : "Upload Plan PDF"}
+                </span>
+              </label>
+            </div>
+          ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm text-slate-600">
@@ -1129,188 +1305,394 @@ if (loading && !quote) {
         onDetectedPageCount={savePlanPageCount}
       />
 
-     <Card>
-  <CardHeader title="Rooms" />
-  <CardBody className="p-0">
-    {/* List OR empty state */}
-    {rooms.length === 0 ? (
-      <div className="p-4 text-slate-600">No rooms yet. Click “Add Room”.</div>
-    ) : (
-      <ul className="divide-y">
-        {rooms.map((r) => {
-          const pricing = pricingMap[r.id];
-          const eff = segmentTotals[r.id] ?? 0;
-          const ready = isRoomReady({ pricing, effectiveLf: eff });
+      <Card>
+        <CardHeader title="Rooms" />
+        <CardBody className="p-0">
+          {/* List OR empty state */}
+          {rooms.length === 0 ? (
+            <div className="p-4 text-slate-600">No rooms yet. Click “Add Room”.</div>
+          ) : (
+            <ul className="divide-y">
+              {rooms.map((r) => {
+                const pricing = pricingMap[r.id];
+                const eff = segmentTotals[r.id] ?? 0;
+                const ready = isRoomReady({ pricing, effectiveLf: eff });
 
-          const totalLf =
-            pricing?.lf_source === "manual"
-              ? getManualLf(pricing)
-              : Number(segmentTotals[r.id] || 0);
+                const totalLf =
+                  pricing?.lf_source === "manual"
+                    ? getManualLf(pricing)
+                    : Number(segmentTotals[r.id] || 0);
 
-          const styleName = pricing?.cabinet_style_id ? styleMap[pricing.cabinet_style_id] : null;
-          const finishName = getPrimaryFinishId(pricing) ? finishMap[getPrimaryFinishId(pricing)] : null;
+                const styleName = pricing?.cabinet_style_id ? styleMap[pricing.cabinet_style_id] : null;
+                const finishName = getPrimaryFinishId(pricing) ? finishMap[getPrimaryFinishId(pricing)] : null;
 
-          return (
-            <li key={r.id} className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
+                return (
+                  <li key={r.id} className="px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
 
-  <div className="flex flex-col">
-    <button
-      type="button"
-      className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
-      disabled={rooms.findIndex((room) => room.id === r.id) === 0}
-      onClick={() => moveRoom(r.id, "up")}
-      title="Move room up"
-    >
-      ▲
-    </button>
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
+                          disabled={rooms.findIndex((room) => room.id === r.id) === 0}
+                          onClick={() => moveRoom(r.id, "up")}
+                          title="Move room up"
+                        >
+                          ▲
+                        </button>
 
-    <button
-      type="button"
-      className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
-      disabled={
-        rooms.findIndex((room) => room.id === r.id) === rooms.length - 1
-      }
-      onClick={() => moveRoom(r.id, "down")}
-      title="Move room down"
-    >
-      ▼
-    </button>
-  </div>
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-900 disabled:opacity-30 leading-none"
+                          disabled={
+                            rooms.findIndex((room) => room.id === r.id) === rooms.length - 1
+                          }
+                          onClick={() => moveRoom(r.id, "down")}
+                          title="Move room down"
+                        >
+                          ▼
+                        </button>
+                      </div>
 
-  <div className="min-w-0">
-                <div className="font-medium truncate">{r.name}</div>
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{r.name}</div>
 
-                <div className="mt-1 text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
-                  <div>
-                    LF: <span className="font-medium tabular-nums">{Number(totalLf || 0).toFixed(2)}</span>
-                  </div>
-                  <div>
-                    Style: <span className="font-medium">{styleName || "—"}</span>
-                  </div>
-                  <div>
-                    Finish: <span className="font-medium">{finishName || "—"}</span>
-                  </div>
-                  {(extrasByRoomId?.[r.id]?.length ?? 0) > 0 && (
-                    <div className="truncate">Extras: {extrasByRoomId[r.id].join(", ")}</div>
-                  )}
-                </div>
+                        <div className="mt-1 text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
+                          <div>
+                            LF: <span className="font-medium tabular-nums">{Number(totalLf || 0).toFixed(2)}</span>
+                          </div>
+                          <div>
+                            Style: <span className="font-medium">{styleName || "—"}</span>
+                          </div>
+                          <div>
+                            Finish: <span className="font-medium">{finishName || "—"}</span>
+                          </div>
+                          {(extrasByRoomId?.[r.id]?.length ?? 0) > 0 && (
+                            <div className="truncate">Extras: {extrasByRoomId[r.id].join(", ")}</div>
+                          )}
+                        </div>
 
-                <div className="mt-2">
-  {ready ? (
-    <Pill tone="green">Ready</Pill>
-  ) : (
-    <Pill tone="amber">Needs info</Pill>
-  )}
-</div>
+                        <div className="mt-2">
+                          {ready ? (
+                            <Pill tone="green">Ready</Pill>
+                          ) : (
+                            <Pill tone="amber">Needs info</Pill>
+                          )}
+                        </div>
 
-</div> {/* room information */}
-</div> {/* arrows + room information */}
+                      </div> {/* room information */}
+                    </div> {/* arrows + room information */}
 
-<div className="flex items-center gap-6">
-                <div className="text-right">
-                  <div className="text-sm text-slate-500">Room Total</div>
-                  <div className="font-semibold tabular-nums">
-                    ${Number(roomTotals[r.id] || 0).toFixed(2)}
-                  </div>
-                </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-sm text-slate-500">Room Total</div>
+                        <div className="font-semibold tabular-nums">
+                          ${Number(roomTotals[r.id] || 0).toFixed(2)}
+                        </div>
+                      </div>
 
-                <div className="flex items-center gap-3">
-  <Link
-    className="text-sm font-medium text-slate-700 hover:underline"
-    to={`/quotes/${id}/rooms/${r.id}?room_variant_id=${selectedVariantId || ""}`}
-  >
-    Edit
-  </Link>
- 
-  <button
-    type="button"
-    className="text-sm font-medium text-slate-600 hover:underline"
-    onClick={() => openRenameRoom(r)}
-  >
-    Rename
-  </button>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          className="text-sm font-medium text-slate-700 hover:underline"
+                          to={`/quotes/${id}/rooms/${r.id}?room_variant_id=${selectedVariantId || ""}`}
+                        >
+                          Edit
+                        </Link>
 
-  <button
-  type="button"
-  className="text-sm font-medium text-red-600 hover:underline"
-  onClick={() => deleteRoom(r)}
->
-  Delete
-</button>
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-slate-600 hover:underline"
+                          onClick={() => openRenameRoom(r)}
+                        >
+                          Rename
+                        </button>
 
-</div>
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-red-600 hover:underline"
+                          onClick={() => deleteRoom(r)}
+                        >
+                          Delete
+                        </button>
+
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* ✅ Add Room form (always available even when rooms is empty) */}
+          {showAdd && (
+            <div className="p-4 border-t bg-white flex flex-wrap items-end gap-2">
+              <div className="min-w-[240px]">
+                <div className="text-xs text-slate-500">Room Name</div>
+                <input
+                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  placeholder="Kitchen, Master Bath, etc."
+                />
               </div>
-            </li>
-          );
-        })}
-      </ul>
-    )}
+              <Button onClick={addRoom}>Add</Button>
+              <Button variant="secondary" onClick={() => setShowAdd(false)}>
+                Cancel
+              </Button>
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
-    {/* ✅ Add Room form (always available even when rooms is empty) */}
-    {showAdd && (
-      <div className="p-4 border-t bg-white flex flex-wrap items-end gap-2">
-        <div className="min-w-[240px]">
-          <div className="text-xs text-slate-500">Room Name</div>
-          <input
-            className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-            value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
-            placeholder="Kitchen, Master Bath, etc."
-          />
+      <Card className="mb-4">
+        <CardHeader title="Hardware / Knobs & Pulls" />
+
+        <CardBody className="space-y-4">
+
+          {/* Existing hardware purchases */}
+          {hardwareRows.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-slate-500">
+                    <th className="py-2 pr-4">Supplier</th>
+                    <th className="py-2 pr-4">Description</th>
+                    <th className="py-2 pr-4 text-right">Our Cost</th>
+                    <th className="py-2 pr-4 text-right">Markup</th>
+                    <th className="py-2 pr-4 text-right">Customer Price</th>
+                    <th className="py-2"></th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {hardwareRows.map((row) => {
+                    const cost = Number(row.cost || 0);
+                    const markup = Number(row.markup_percent || 0);
+                    const customerPrice = cost * (1 + markup / 100);
+
+                    return (
+                      <tr key={row.id} className="border-b">
+                        <td className="py-3 pr-4 font-medium">
+                          {row.supplier || "—"}
+                        </td>
+
+                        <td className="py-3 pr-4 text-slate-600">
+                          {row.description || "—"}
+                        </td>
+
+                        <td className="py-3 pr-4 text-right tabular-nums">
+                          ${cost.toFixed(2)}
+                        </td>
+
+                        <td className="py-3 pr-4 text-right tabular-nums">
+                          {markup.toFixed(2)}%
+                        </td>
+
+                        <td className="py-3 pr-4 text-right font-medium tabular-nums">
+                          ${customerPrice.toFixed(2)}
+                        </td>
+
+                        <td className="py-3 text-right">
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-red-600 hover:underline"
+                            onClick={() => deleteHardwareLine(row.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {hardwareRows.length === 0 && (
+            <div className="text-sm text-slate-500">
+              No hardware purchases entered yet.
+            </div>
+          )}
+
+          {/* Add hardware purchase */}
+          <div className="rounded-lg border bg-slate-50 p-4">
+            <div className="mb-3 font-medium">Add Hardware Purchase</div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {/* Supplier */}
+              <div>
+                <label className="text-xs text-slate-500">Supplier</label>
+
+                <select
+                  className="mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm"
+                  value={newHardwareSupplierId}
+                  onChange={(e) => setNewHardwareSupplierId(e.target.value)}
+                >
+                  <option value="">Select supplier</option>
+
+                  {hardwareSuppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+
+                {!showAddSupplier ? (
+                  <button
+                    type="button"
+                    className="mt-2 text-sm font-medium text-slate-600 hover:underline"
+                    onClick={() => setShowAddSupplier(true)}
+                  >
+                    + Add New Supplier
+                  </button>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      className="w-full rounded-md border bg-white px-3 py-2 text-sm"
+                      value={newSupplierName}
+                      onChange={(e) => setNewSupplierName(e.target.value)}
+                      placeholder="Supplier name"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={addHardwareSupplier}
+                    >
+                      Add
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setShowAddSupplier(false);
+                        setNewSupplierName("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-xs text-slate-500">
+                  Description / Notes
+                </label>
+
+                <input
+                  className="mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm"
+                  value={newHardwareDescription}
+                  onChange={(e) => setNewHardwareDescription(e.target.value)}
+                  placeholder="Kitchen hardware"
+                />
+              </div>
+
+              {/* Cost */}
+              <div>
+                <label className="text-xs text-slate-500">
+                  Our Cost
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="mt-1 w-full rounded-md border bg-white px-3 py-2 text-sm"
+                  value={newHardwareCost}
+                  onChange={(e) => setNewHardwareCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="text-sm text-slate-500">
+                Current hardware markup:{" "}
+                <span className="font-medium text-slate-700">
+                  {Number(hardwareMarkup || 0).toFixed(2)}%
+                </span>
+              </div>
+
+              <Button onClick={addHardwareLine}>
+                Add Hardware Line
+              </Button>
+            </div>
+          </div>
+
+          {/* Hardware totals */}
+          <div className="ml-auto max-w-sm space-y-2 border-t pt-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600">Our Hardware Cost</span>
+              <span className="tabular-nums">
+                ${Number(hardwareCostTotal || 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600">Hardware Markup</span>
+              <span className="tabular-nums">
+                ${Number(hardwareMarkupTotal || 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex justify-between border-t pt-2 text-base font-semibold">
+              <span>Hardware to Add to QuickBooks</span>
+              <span className="tabular-nums">
+                ${Number(hardwareBillTotal || 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+        </CardBody>
+      </Card>
+
+      {renameRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-md rounded-xl border bg-white shadow-xl">
+            <div className="border-b px-4 py-3">
+              <div className="font-semibold">Rename Room</div>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <div>
+                <label className="text-sm text-slate-600">Room Name</label>
+                <input
+                  autoFocus
+                  className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRoomName();
+                    if (e.key === "Escape") setRenameRoom(null);
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setRenameRoom(null)}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="button"
+                  disabled={!renameValue.trim()}
+                  onClick={saveRoomName}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-        <Button onClick={addRoom}>Add</Button>
-        <Button variant="secondary" onClick={() => setShowAdd(false)}>
-          Cancel
-        </Button>
-      </div>
-    )}
-  </CardBody>
-</Card>
-
-{renameRoom && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-    <div className="w-full max-w-md rounded-xl border bg-white shadow-xl">
-      <div className="border-b px-4 py-3">
-        <div className="font-semibold">Rename Room</div>
-      </div>
-
-      <div className="space-y-4 p-4">
-        <div>
-          <label className="text-sm text-slate-600">Room Name</label>
-          <input
-            autoFocus
-            className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") saveRoomName();
-              if (e.key === "Escape") setRenameRoom(null);
-            }}
-          />
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setRenameRoom(null)}
-          >
-            Cancel
-          </Button>
-
-          <Button
-            type="button"
-            disabled={!renameValue.trim()}
-            onClick={saveRoomName}
-          >
-            Save
-          </Button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
     </Page>
   );

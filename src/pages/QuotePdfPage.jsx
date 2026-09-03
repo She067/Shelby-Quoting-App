@@ -35,9 +35,22 @@ export default function QuotePdfPage() {
   const [selectedVariantId, setSelectedVariantId] = useState(null);
   const [selectedVariantName, setSelectedVariantName] = useState("Base");
 
+  const [hardwareRows, setHardwareRows] = useState([]);
+
   const quoteTotal = useMemo(() => {
     return rooms.reduce((sum, r) => sum + Number(pricingMap?.[r.id]?.room_subtotal || 0), 0);
   }, [rooms, pricingMap]);
+
+  const hardwareTotal = useMemo(() => {
+    return hardwareRows.reduce((sum, row) => {
+      const cost = Number(row.cost || 0);
+      const markup = Number(row.markup_percent || 0);
+
+      return sum + cost * (1 + markup / 100);
+    }, 0);
+  }, [hardwareRows]);
+
+  const combinedTotal = quoteTotal + hardwareTotal;
 
   // ✅ helper: extras line (used by BOTH preview + PDF)
   function buildExtrasLine(roomId) {
@@ -214,6 +227,19 @@ export default function QuotePdfPage() {
       if (!alive) return;
       setStyleMap(sMap);
       setFinishMap(fMap);
+
+      // Hardware
+      const { data: hardwareData, error: hardwareError } = await supabase
+        .from("quote_hardware")
+        .select("cost, markup_percent")
+        .eq("quote_id", id)
+        .order("created_at", { ascending: true });
+
+      if (hardwareError) {
+        console.warn("Error loading quote hardware:", hardwareError);
+      } else {
+        setHardwareRows(hardwareData || []);
+      }
 
       setLoading(false);
     }
@@ -470,27 +496,78 @@ export default function QuotePdfPage() {
       y -= 10;
 
       // Totals block
-      ensureSpace(120);
+      ensureSpace(150);
 
       const boxW = 240;
       const boxX = pageWidth - margin - boxW;
-      const boxY = y - 64;
+      const boxH = hardwareTotal > 0 ? 112 : 74;
+      const boxY = y - boxH + 10;
 
       page.drawRectangle({
         x: boxX,
         y: boxY,
         width: boxW,
-        height: 74,
+        height: boxH,
         color: colors.panel,
         borderColor: colors.line,
         borderWidth: 1,
       });
 
-      drawText("Total", boxX + 12, boxY + 48, 11, true, colors.muted);
+      if (hardwareTotal > 0) {
+        drawText("Cabinetry", boxX + 12, boxY + 84, 10, false, colors.muted);
 
-      const totalStr = money(quoteTotal);
-      const totW = textWidth(totalStr, 18, true);
-      drawText(totalStr, boxX + boxW - 12 - totW, boxY + 22, 18, true, colors.text);
+        const cabinetryStr = money(quoteTotal);
+        const cabinetryW = textWidth(cabinetryStr, 11, true);
+        drawText(
+          cabinetryStr,
+          boxX + boxW - 12 - cabinetryW,
+          boxY + 84,
+          11,
+          true,
+          colors.text
+        );
+
+        drawText("Hardware", boxX + 12, boxY + 58, 10, false, colors.muted);
+
+        const hardwareStr = money(hardwareTotal);
+        const hardwareW = textWidth(hardwareStr, 11, true);
+        drawText(
+          hardwareStr,
+          boxX + boxW - 12 - hardwareW,
+          boxY + 58,
+          11,
+          true,
+          colors.text
+        );
+
+        drawLine(boxY + 45);
+
+        drawText("Total", boxX + 12, boxY + 18, 11, true, colors.muted);
+
+        const totalStr = money(combinedTotal);
+        const totW = textWidth(totalStr, 18, true);
+        drawText(
+          totalStr,
+          boxX + boxW - 12 - totW,
+          boxY + 12,
+          18,
+          true,
+          colors.text
+        );
+      } else {
+        drawText("Total", boxX + 12, boxY + 48, 11, true, colors.muted);
+
+        const totalStr = money(quoteTotal);
+        const totW = textWidth(totalStr, 18, true);
+        drawText(
+          totalStr,
+          boxX + boxW - 12 - totW,
+          boxY + 22,
+          18,
+          true,
+          colors.text
+        );
+      }
 
       y = boxY - 24;
 
@@ -576,8 +653,33 @@ export default function QuotePdfPage() {
               </div>
 
               <div className="rounded-xl border bg-white p-3">
-                <div className="text-xs text-slate-500">Total</div>
-                <div className="text-xl font-bold tabular-nums">{money(quoteTotal)}</div>
+                {hardwareTotal > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Cabinetry</span>
+                      <span className="tabular-nums">{money(quoteTotal)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Hardware</span>
+                      <span className="tabular-nums">{money(hardwareTotal)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t pt-2">
+                      <span className="font-semibold">Total</span>
+                      <span className="text-xl font-bold tabular-nums">
+                        {money(combinedTotal)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xs text-slate-500">Total</div>
+                    <div className="text-xl font-bold tabular-nums">
+                      {money(quoteTotal)}
+                    </div>
+                  </>
+                )}
               </div>
 
               {rooms.length === 0 ? (
@@ -640,9 +742,27 @@ export default function QuotePdfPage() {
                     })}
                   </ul>
 
-                  <div className="px-4 py-4 border-t flex items-center justify-between">
-                    <div className="text-lg font-semibold">Quote Total</div>
-                    <div className="text-xl font-bold tabular-nums">{money(quoteTotal)}</div>
+                  <div className="px-4 py-4 border-t space-y-2">
+                    {hardwareTotal > 0 && (
+                      <>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="text-slate-500">Cabinetry</div>
+                          <div className="tabular-nums">{money(quoteTotal)}</div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="text-slate-500">Hardware</div>
+                          <div className="tabular-nums">{money(hardwareTotal)}</div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="text-lg font-semibold">Quote Total</div>
+                      <div className="text-xl font-bold tabular-nums">
+                        {money(hardwareTotal > 0 ? combinedTotal : quoteTotal)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -657,8 +777,8 @@ export default function QuotePdfPage() {
               </div>
 
               <div className="text-xs text-slate-500">
-                PDF output includes room name, style, finish, extras names (qty if &gt; 1), room subtotal, and total.
-                It does not include LF, rates, formulas, or tier logic.
+                PDF output includes room name, style, finish, extras names (qty if &gt; 1), room subtotal, hardware total, and final total.
+                It does not include LF, rates, formulas, tier logic, hardware supplier costs, or hardware markup details.
               </div>
             </div>
           )}
