@@ -1,5 +1,6 @@
 console.log("UI LOADED ✅", new Date().toISOString());
 import React from "react";
+import { Link } from "react-router-dom";
 
 export function Page({ title, subtitle, actions, children }) {
   return (
@@ -8,9 +9,13 @@ export function Page({ title, subtitle, actions, children }) {
         <div className="h-1 w-full bg-blue-600" />
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
-              CQ
-            </div>
+            <Link
+              to="/"
+              className="h-9 w-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold hover:bg-blue-700 transition"
+              aria-label="Go to home page"
+            >
+              SQ
+            </Link>
             <div>
               <div className="font-semibold leading-tight text-slate-900">{title}</div>
               {subtitle ? (
@@ -62,10 +67,10 @@ export function Button({ variant = "primary", className = "", ...props }) {
     variant === "primary"
       ? "bg-blue-600 text-white hover:bg-blue-700"
       : variant === "secondary"
-      ? "bg-white border border-slate-200 text-slate-800 hover:bg-slate-50"
-      : variant === "ghost"
-      ? "text-slate-700 hover:bg-slate-100"
-      : "bg-white border";
+        ? "bg-white border border-slate-200 text-slate-800 hover:bg-slate-50"
+        : variant === "ghost"
+          ? "text-slate-700 hover:bg-slate-100"
+          : "bg-white border";
 
   return <button className={`${base} ${styles} ${className}`} {...props} />;
 }
@@ -75,8 +80,8 @@ export function Pill({ tone = "amber", children }) {
     tone === "green"
       ? "bg-green-100 text-green-800 border border-green-200"
       : tone === "amber"
-      ? "bg-amber-100 text-amber-800 border border-amber-200"
-      : "bg-slate-100 text-slate-800 border border-slate-200";
+        ? "bg-amber-100 text-amber-800 border border-amber-200"
+        : "bg-slate-100 text-slate-800 border border-slate-200";
   return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>{children}</span>;
 }
 
