@@ -49,7 +49,7 @@ export function Card({ children, className = "" }) {
 export function CardHeader({ title, right, className = "" }) {
   return (
     <div className={`px-4 py-3 border-b border-slate-200 flex items-center justify-between ${className}`}>
-      <div className="font-semibold text-slate-900">{title}</div>
+      <div className="font-semibold">{title}</div>
       {right ? <div>{right}</div> : null}
     </div>
   );

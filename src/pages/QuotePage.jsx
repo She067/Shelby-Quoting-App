@@ -1222,7 +1222,10 @@ export default function QuotePage() {
       </div>
 
       <Card className="mb-4">
-        <CardHeader title="House Plan (Optional)" />
+        <CardHeader
+          title="House Plan (Optional)"
+          className="bg-blue-100 text-black rounded-t-2xl"
+        />
         <CardBody>
           {!planDoc ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1306,7 +1309,10 @@ export default function QuotePage() {
       />
 
       <Card>
-        <CardHeader title="Rooms" />
+        <CardHeader
+          title="Rooms"
+          className="bg-blue-100 text-black rounded-t-2xl"
+        />
         <CardBody className="p-0">
           {/* List OR empty state */}
           {rooms.length === 0 ? (
@@ -1445,7 +1451,10 @@ export default function QuotePage() {
       </Card>
 
       <Card className="mb-4">
-        <CardHeader title="Hardware / Knobs & Pulls" />
+        <CardHeader
+          title="Hardware / Knobs & Pulls"
+          className="bg-blue-100 text-black rounded-t-2xl"
+        />
 
         <CardBody className="space-y-4">
 
